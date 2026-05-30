@@ -69,12 +69,6 @@ static int lservice_get_pool(lua_State *L) {
     return 1;
 }
 
-static int lservice_get_cond(lua_State *L) {
-    service_t * s = lua_touserdata(L, 1);
-    lua_pushlightuserdata(L, s->c);
-    return 1;
-}
-
 static int lservice_get_async(lua_State *L) {
     service_t * s = lua_touserdata(L, 1);
     lua_pushlightuserdata(L, s->async_handler);
@@ -180,7 +174,6 @@ LUAMOD_API int luaopen_lservice3_c(lua_State *L) {
         // pool
 		{ "_pool_new", lservice_pool_new },
 		{ "_get_pool", lservice_get_pool },
-		{ "_get_cond", lservice_get_cond },
 		{ "_get_async", lservice_get_async },
 		{ "_get_addr", lservice_get_addr },
 		{ "_get_uv_loop", lservice_get_uv_loop },

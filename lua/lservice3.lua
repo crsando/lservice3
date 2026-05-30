@@ -27,7 +27,7 @@ local MESSAGE_RECEIPT_RESPONCE = 4
 
 -- preserved internal parameters
 service.self = nil -- the current running service
-service.uv = nil -- loaded luv
+service.uv = nil -- 这个变量会在service启动的一开始就启动
 service.pool = nil
 service.config = nil
 
@@ -102,13 +102,6 @@ function service.get_id(addr)
     end
 end
 
-function service.get_cond(addr) 
-    if service.self == nil then return nil end
-    addr = addr or service.self
-    return service._get_cond(addr)
-end
-
-
 function service.get_async(addr) 
     if service.self == nil then return nil end
     addr = addr or service.self
@@ -123,7 +116,6 @@ function service.get_pool(addr)
 end
 
 function service.get_addr(id)
-    -- print('get_addr', id, type(id))
     if not id then return service.self end -- if input is lightuserdata
     if type(id) ~= "number" then return id end
     local rst = service._get_addr(service.self, id)
@@ -132,24 +124,22 @@ function service.get_addr(id)
 end
 
 
-function service.input(s, config, uv)
+function service.input(s, config_ptr, uv)
     -- print("service.input", s, config, uv)
     if s then
         service.self = s
         service.pool = service.get_pool(s)
-        service.config = service.unpack_remove(config)
+        service.config = service.unpack_remove(config_ptr)
         service.uv = uv
-        -- print("service", service.get_id(), "with config", inspect(service.config) )
     else 
         -- print("No input, running in standalone mode")
         service.self = nil
         service.pool = nil
         service.config = {}
-        service.uv = uv
+        service.uv = require "luv"
     end
 
     return service
-    -- print("service.input end", s, config)
 end
 
 function service.send_message(to, session, type, msg, sz)
@@ -408,5 +398,17 @@ function service.dispatch(request_handler)
 end -- end function (handler)
 return service._on_msg
 end -- end service.dispatch
+
+function service.bootstrap(entry)
+    assert(entry and type(entry) == "table")
+    assert(entry.source and type(entry.source == "string"))
+
+    local entry_point = entry.start or "boot"
+
+    local addr = service.new { source = entry.source, config = entry.config, name = "root" }
+    service.start(addr)
+    service.send(service.get_id(addr), entry_point)
+    service.join(addr)
+end
 
 return service

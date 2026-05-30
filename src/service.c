@@ -329,8 +329,6 @@ service_t * service_new(service_pool_t * pool, const char * name, const char * s
     s->config = config;
 
     s->q = queue_new_ptr(_SERVICE_MQ_DEF_SIZE_);
-    s->c = (struct cond *)malloc(sizeof(struct cond));
-    cond_create(s->c);
 
     // init libuv main loop
     s->loop = (uv_loop_t *)malloc(sizeof(uv_loop_t));
@@ -396,7 +394,6 @@ int service_stop(service_t * s) {
 int service_free(service_t * s) {
     lua_close(s->L);
     queue_delete(s->q);
-    cond_release(s->c);
 
     free(s->loop);
     return 1;

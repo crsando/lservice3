@@ -11,7 +11,6 @@
 
 #include "registry.h"
 #include "queue.h"
-#include "cond.h"
 #include "message.h"
 
 typedef unsigned int service_id;
@@ -47,7 +46,6 @@ struct service {
 
     // message queue (i.e. inbox)
     struct queue * q;
-    struct cond * c;
 
     lua_State * L;
     int func_ref;

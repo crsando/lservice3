@@ -1,7 +1,6 @@
 local inspect = require "inspect"
 local service = require "lservice3" .input(...)
 
-
 local S = {}
 
 function S.pong()
@@ -11,15 +10,11 @@ end
 function S.boot()
     print("root is booting")
     local remote = service.spawn { source = "@service/remote.lua", config = {} }
-
     local user = service.spawn { source = "@service/user.lua", config = {} }
-    local rsp = service.call_timeout(1000, user, "ping", 0)
     local rsp = service.call(user, "ping", 0)
     print("get rsp", rsp)
     service.call(user, "quit")
-
-    
-    -- service.call(0, "quit")
+    service.call(0, "quit")
 end
 
 function S.quit()
