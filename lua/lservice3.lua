@@ -1,4 +1,4 @@
-local service = require "lservice2_c"
+local service = require "lservice3_c"
 local inspect = require "inspect"
 
 --[[
@@ -27,6 +27,7 @@ local MESSAGE_RECEIPT_RESPONCE = 4
 
 -- preserved internal parameters
 service.self = nil -- the current running service
+service.uv = nil -- loaded luv
 service.pool = nil
 service.config = nil
 
@@ -84,6 +85,11 @@ function service.spawn(t)
     return service.get_id(addr) 
 end
 
+
+function service.get_uv_loop(addr)
+    return service._get_uv_loop(service.self)
+end
+
 -- get current service_id or get_id by addr
 local CURRENT_SERVICE_ID = nil
 function service.get_id(addr)
@@ -102,6 +108,14 @@ function service.get_cond(addr)
     return service._get_cond(addr)
 end
 
+
+function service.get_async(addr) 
+    if service.self == nil then return nil end
+    addr = addr or service.self
+    return service._get_async(addr)
+end
+
+
 function service.get_pool(addr) 
     if service.self == nil then return nil end
     addr = addr or service.self
@@ -117,18 +131,21 @@ function service.get_addr(id)
     return rst
 end
 
-function service.input(s, config)
-    -- print("service.input", s, config)
+
+function service.input(s, config, uv)
+    -- print("service.input", s, config, uv)
     if s then
         service.self = s
         service.pool = service.get_pool(s)
         service.config = service.unpack_remove(config)
+        service.uv = uv
         -- print("service", service.get_id(), "with config", inspect(service.config) )
     else 
         -- print("No input, running in standalone mode")
         service.self = nil
         service.pool = nil
         service.config = {}
+        service.uv = uv
     end
 
     return service
@@ -271,6 +288,44 @@ function service.call(id, ...)
 	end
 end
 
+
+-- test purpose
+--[[
+function service.call_timeout(timeout, id, ...)
+    -- print("begin service.call:", id, session_id + 1)
+    service._send_message(
+        service.pool,
+        service.get_id(), -- from
+        id,  -- to
+        session_id,
+        MESSAGE_REQUEST, 
+        service.pack(...)
+    )
+
+	session_coroutine_suspend_lookup[session_id] = running_thread
+	session_id = session_id + 1
+
+    local timer = service.uv.new_timer()
+    local co = service.get_session()
+    timer:start(timeout, 0, function() 
+            service.resume_session(co, -1)
+        end)
+
+    -- print("begin service.call yield_session:", id)
+	local type, session, msg, sz = yield_session()
+    -- print("service.call get response from")
+	if type == MESSAGE_RESPONSE then
+		return service.unpack_remove(msg, sz)
+    elseif type == -1 then 
+        return -1, "timed out"
+	else
+		-- type == MESSAGE_ERROR
+		rethrow_error(2, service.unpack_remove(msg, sz))
+	end
+end
+]]
+
+
 function service.get_session()
     return running_thread
 end
@@ -278,10 +333,18 @@ end
 local quit = false
 function service.quit()
     quit = true
+    service._stop(service.self)
 end
 
+--
+-- internal procedures
+--
 
-function service.dispatch(request_handler)
+service._on_msg = nil
+service._on_idle = nil
+
+function service.dispatch(request_handler) 
+    service._on_msg = function (msg)
     -- if in standalone mode
     if not service.self then return nil end
 
@@ -297,7 +360,7 @@ function service.dispatch(request_handler)
     end
 
     -- main loop
-	while true do
+	while msg do
         local from, to, session, type, msg, sz = service.recv_message(true) -- blocking
         -- print("recv_message", from, to, session, type, msg, sz)
         -- if a request is received
@@ -322,10 +385,16 @@ function service.dispatch(request_handler)
                 resume_session(co, type, session, msg, sz)
             end
         else
-            -- on idle, do nothing here
-            -- print("on_idle")
+            break -- break while true
         end
+    end
 
+    -- time out handler
+    
+    -- socket/fs handler
+
+    -- on idle
+    do 
         -- if on_idle is registered, run here
         if (not quit) and (service.on_idle) then 
             service.on_idle() -- attention, this is not a coroutine
@@ -333,9 +402,11 @@ function service.dispatch(request_handler)
 
         -- dispatch_wakeup()
         if quit then
-            break
+            service.quit()
         end
 	end -- end while
-end -- end function
+end -- end function (handler)
+return service._on_msg
+end -- end service.dispatch
 
 return service

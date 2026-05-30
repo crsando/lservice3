@@ -7,7 +7,7 @@ PREFIX=/usr/local
 LUAINC?=-I/usr/local/include/luajit-2.1
 SHARED=--shared -fPIC
 SO=so
-LIBS=-lpthread -lluajit-5.1
+LIBS=-lpthread -lluajit-5.1 -luv
 
 all : lservice3_c.so
 

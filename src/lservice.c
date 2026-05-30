@@ -5,6 +5,8 @@
 #include <lauxlib.h>
 #include <stdbool.h>
 
+#include "uv.h"
+
 #include "message.h"
 #include "service.h"
 #include "log.h"
@@ -35,10 +37,23 @@ static int lservice_start(lua_State *L) {
     return 1;
 }
 
+static int lservice_stop(lua_State *L) {
+    service_t * s = lua_touserdata(L, 1);
+    int ret = service_stop(s);
+    lua_pushinteger(L, ret);
+    return 1;
+}
+
 static int lservice_join(lua_State *L) {
     service_t * s = lua_touserdata(L, 1);
     int ret = service_join(s);
     lua_pushinteger(L, ret);
+    return 1;
+}
+
+static int lservice_get_uv_loop(lua_State *L) {
+    service_t * s = lua_touserdata(L, 1);
+    lua_pushlightuserdata(L, s->loop);
     return 1;
 }
 
@@ -57,6 +72,12 @@ static int lservice_get_pool(lua_State *L) {
 static int lservice_get_cond(lua_State *L) {
     service_t * s = lua_touserdata(L, 1);
     lua_pushlightuserdata(L, s->c);
+    return 1;
+}
+
+static int lservice_get_async(lua_State *L) {
+    service_t * s = lua_touserdata(L, 1);
+    lua_pushlightuserdata(L, s->async_handler);
     return 1;
 }
 
@@ -153,18 +174,21 @@ luaseri_remove(lua_State *L) {
 }
 
 // open lua library
-LUAMOD_API int luaopen_lservice2_c(lua_State *L) {
+LUAMOD_API int luaopen_lservice3_c(lua_State *L) {
 	// luaL_checkversion(L);
 	luaL_Reg l[] = {
         // pool
 		{ "_pool_new", lservice_pool_new },
 		{ "_get_pool", lservice_get_pool },
 		{ "_get_cond", lservice_get_cond },
+		{ "_get_async", lservice_get_async },
 		{ "_get_addr", lservice_get_addr },
+		{ "_get_uv_loop", lservice_get_uv_loop },
 
         // service
 		{ "_new", lservice_new },
 		{ "_start", lservice_start },
+		{ "_stop", lservice_stop },
 		{ "_join", lservice_join },
 		{ "_get_id", lservice_get_id },
 		{ "_send_message", lservice_send_message },

@@ -3,12 +3,50 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "uv.h"
+
 #include "log.h"
 #include <assert.h>
 #include <stdlib.h>
 #include "message.h"
 
+#include "lua.h"
+#include "loadluv.h"
+
 #define _SERVICE_MQ_DEF_SIZE_ 1024
+
+// 每次service收到消息的时候，由此进入
+void service_async_cb(uv_async_t * handle) {
+    service_t * s = NULL;
+    int service_ref = 0;
+    s = (service_t *)(handle->data);
+    if (s == NULL) {
+        log_debug("handle data error, need service_t pointer");
+        return;
+    }
+
+    service_ref = s->func_ref;
+    if (service_ref == LUA_NOREF || service_ref == LUA_REFNIL) {
+        log_debug("service function not loaded, do nothing\n");
+        return;
+    }
+
+    // 从 registry 取出之前保存的 function，压到栈顶
+    lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->func_ref);
+
+    // 压入参数
+    lua_pushstring(s->L, "msg");
+
+    // 调用：1 个参数，1 个返回值
+    if (lua_pcall(s->L, 1, 1, 0) != LUA_OK) {
+        fprintf(stderr, "lua_pcall error: %s\n", lua_tostring(s->L, -1));
+        lua_pop(s->L, 1);
+    }
+}
+
+
+//
 
 service_pool_t * service_pool_new() {
     service_pool_t * pool = NULL;
@@ -184,8 +222,6 @@ int lua_loadfile_as_buffer(lua_State *L, const char *at_name) {
     return status;
 }
 
-
-
 int service_init_lua(service_t * s) {
     lua_State * L;
 	L = luaL_newstate();
@@ -203,6 +239,7 @@ int service_init_lua(service_t * s) {
 
 	luaL_openlibs(L);
 
+    // 加载 对应的lua source file
     if(s->source[0] == '@') {
         if(lua_loadfile_as_buffer(L, s->source)) { 
             log_error("FATAL THREAD PANIC: (loadbuffe) %s", lua_tolstring(L, -1, NULL));
@@ -229,15 +266,32 @@ int service_init_lua(service_t * s) {
         n_args ++;
     }
 
+    // load luv
+    if(service_load_luv(L, s->loop)) {
+        n_args ++;
+    }
 
     // run the lua code
-    // 2 input expect (service, config), no output
-	if(lua_pcall(L, n_args, 0, 0)) {
+    // 3 input expect (service, config, uv), no output
+	if(lua_pcall(L, n_args, 1, 0)) {
 		log_error("FATAL THREAD PANIC: (pcall) %s", lua_tolstring(L, -1, NULL));
 		lua_close(L);
 		return -1;
 	}
 
+    // 理想情况下，上述运行的lua代码最后会返回一个函数handler（通过service.dispatch组装成一个函数）
+    // 我们要保存这个函数，在每次service中断（收到某个消息）的时候调用
+
+    if (!lua_isfunction(L, -1)) {
+        log_debug("lua service file must return a function\n");
+        lua_close(L);
+        return -1;
+    }
+
+    s->func_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    // 跑uv的主循环
+    uv_run(s->loop, UV_RUN_DEFAULT);
 
     return 0; // no error
 }
@@ -278,6 +332,15 @@ service_t * service_new(service_pool_t * pool, const char * name, const char * s
     s->c = (struct cond *)malloc(sizeof(struct cond));
     cond_create(s->c);
 
+    // init libuv main loop
+    s->loop = (uv_loop_t *)malloc(sizeof(uv_loop_t));
+    uv_loop_init(s->loop);
+
+    // init async_handler
+    s->async_handler = (uv_async_t *)malloc(sizeof(uv_async_t));
+    uv_async_init(s->loop, s->async_handler, service_async_cb);
+    s->async_handler->data = (void *)s;
+
     return s;
 }
 
@@ -285,7 +348,7 @@ service_t * service_new(service_pool_t * pool, const char * name, const char * s
 void * service_routine_wrap(void * arg) {
     service_t * s = (service_t *)arg;
     service_init_lua(s);
-    log_debug("service_routine_wrap : service exited", s->id);
+    log_debug("service_routine_wrap : service (%d) exited", s->id);
 
     return NULL;
 }
@@ -298,32 +361,47 @@ int service_start(service_t * s) {
 }
 
 int service_send(service_t * s, message_t * msg) {
-    cond_trigger_begin(s->c);
     queue_push_ptr(s->q, msg);
-    cond_trigger_end(s->c, 1);
+    uv_async_send(s->async_handler);
     return 1;
 }
 
 message_t * service_recv(service_t * s, bool blocking) {
     // log_debug("service_recv begin");
     message_t * msg = NULL;
-    cond_wait_begin(s->c);
     if ( queue_length(s->q) > 0)
         msg = queue_pop_ptr(s->q);
 
     if( (!msg) && (blocking) ) {
-        if( queue_length(s->q) == 0 )
-            cond_wait(s->c);
         msg = queue_pop_ptr(s->q);
     }
 
-    cond_wait_end(s->c);
     return msg;
+}
+
+void walk_cb(uv_handle_t* handle, void* arg) {
+    if (!uv_is_closing(handle)) {
+        uv_close(handle, NULL);
+    }
+}
+
+int service_stop(service_t * s) {
+    uv_stop(s->loop);
+    uv_walk(s->loop, walk_cb, NULL);
+    uv_run(s->loop, UV_RUN_DEFAULT);
+    uv_loop_close(s->loop);
+    return 1;
 }
 
 int service_free(service_t * s) {
     lua_close(s->L);
     queue_delete(s->q);
     cond_release(s->c);
+
+    free(s->loop);
     return 1;
 }
+
+//
+// socket related stuffs
+//

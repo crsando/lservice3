@@ -7,6 +7,8 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
+#include "uv.h" // libuv
+
 #include "registry.h"
 #include "queue.h"
 #include "cond.h"
@@ -48,7 +50,11 @@ struct service {
     struct cond * c;
 
     lua_State * L;
-    // int lua_func_ref;
+    int func_ref;
+
+    // libuv main loop
+    uv_loop_t * loop;
+    uv_async_t * async_handler;
 };
 
 service_pool_t * service_pool_new();
@@ -64,8 +70,15 @@ int service_join(service_t * s);
 // int service_init_lua(service_t * s, const char * code, void * config);
 int service_init_lua(service_t * s);
 int service_start(service_t * s);
+int service_stop(service_t * s);
 
 int service_send(service_t * s, message_t * msg);
 message_t * service_recv(service_t * s, bool blocking);
 
 int service_free(service_t * s);
+
+struct service_stream {
+
+};
+
+typedef struct service_stream service_stream_t;
