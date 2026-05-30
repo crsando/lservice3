@@ -1,5 +1,5 @@
 local service = require "lservice3_c"
-local inspect = require "inspect"
+-- local inspect = require "inspect"
 
 --[[
     common conventions:
@@ -334,69 +334,66 @@ service._on_msg = nil
 service._on_idle = nil
 
 function service.dispatch(request_handler) 
-    service._on_msg = function (msg)
-    -- if in standalone mode
-    if not service.self then return nil end
-
-    local function request(command, ...)
-        -- print("Begin request", inspect(command))
-        local s = request_handler[command]
-        if not s then
-            error("Unknown request message : " .. command)
-            return
-        end
-        send_response(s(...))
-        -- print("End request", command)
-    end
-
-    -- main loop
-	while msg do
-        local from, to, session, type, msg, sz = service.recv_message(true) -- blocking
-        -- print("recv_message", from, to, session, type, msg, sz)
-        -- if a request is received
-        if type == MESSAGE_REQUEST then 
-            local co = new_session(function (type, msg, sz)
-                    request(service.unpack_remove(msg, sz))
-                end, from, session)
-            -- print("session start", session, co)
-            resume_session(co, type, msg, sz)
-        -- on response, resume the previous session
-        elseif session then
-            -- print("suspend", inspect(session_coroutine_suspend_lookup))
-            local co = session_coroutine_suspend_lookup[session]
-            -- print("resume", session, co)
-            if co == nil then
-                -- print("Unknown response session : ", session)
-                service.remove(msg, sz)
-                -- not implemented yet
-                -- service.quit()
-            else
-                session_coroutine_suspend_lookup[session] = nil
-                resume_session(co, type, session, msg, sz)
+    local request; do 
+        if type(request_handler) == "function" then 
+            request = function (command, ...) 
+                send_response(request_handler(command, ...))
             end
-        else
-            break -- break while true
+        elseif type(request_handler) == "table" then 
+            request = function (command, ...)
+                local s = request_handler[command]
+                if not s then
+                    error("Unknown request message : " .. command)
+                    return
+                end
+                send_response(s(...))
+            end
         end
     end
 
-    -- time out handler
-    
-    -- socket/fs handler
+    service._on_msg = function (msg)
+        -- if in standalone mode
+        if not service.self then return nil end
 
-    -- on idle
-    do 
-        -- if on_idle is registered, run here
-        if (not quit) and (service.on_idle) then 
-            service.on_idle() -- attention, this is not a coroutine
+        -- main loop
+        while msg do
+            local from, to, session, type, msg, sz = service.recv_message(true) -- blocking
+            -- print("recv_message", from, to, session, type, msg, sz)
+            -- if a request is received
+            if type == MESSAGE_REQUEST then 
+                local co = new_session(function (type, msg, sz)
+                        request(service.unpack_remove(msg, sz))
+                    end, from, session)
+                resume_session(co, type, msg, sz)
+            -- on response, resume the previous session
+            elseif session then
+                local co = session_coroutine_suspend_lookup[session]
+                if co == nil then
+                    service.remove(msg, sz)
+                else
+                    session_coroutine_suspend_lookup[session] = nil
+                    resume_session(co, type, session, msg, sz)
+                end
+            else
+                break -- break while true
+            end
         end
 
-        -- dispatch_wakeup()
-        if quit then
-            service.quit()
-        end
-	end -- end while
-end -- end function (handler)
-return service._on_msg
+        -- on idle
+        do 
+            -- if on_idle is registered, run here
+            if (not quit) and (service.on_idle) then 
+                service.on_idle() -- attention, this is not a coroutine
+            end
+
+            -- dispatch_wakeup()
+            if quit then
+                service.quit()
+            end
+        end -- end while
+    end -- end function (handler)
+
+    return service._on_msg
 end -- end service.dispatch
 
 function service.bootstrap(entry)
