@@ -408,4 +408,19 @@ function service.bootstrap(entry)
     service.join(addr)
 end
 
+--
+-- utility functions
+--
+
+function service.set_timeout(ms, cb)
+    local timer = service.uv.new_timer()
+    timer:start(ms, 0, function()
+        timer:stop()
+        timer:close()
+        cb()
+    end)
+    return timer
+end
+
 return service
+
