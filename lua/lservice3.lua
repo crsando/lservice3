@@ -102,6 +102,12 @@ function service.get_id(addr)
     end
 end
 
+function service.lookup(name) 
+    print("service.lookup", name, service.get_pool())
+    if not name then return 0 end
+    return service._lookup(service.get_pool(), name)
+end
+
 function service.get_async(addr) 
     if service.self == nil then return nil end
     addr = addr or service.self

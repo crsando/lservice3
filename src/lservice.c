@@ -30,6 +30,15 @@ static int lservice_new(lua_State *L) {
     return 1;
 }
 
+static int lservice_lookup(lua_State *L) {
+    service_t * s;
+    service_pool_t * pool = lua_touserdata(L, 1);
+    const char * name = ( (lua_isnil(L,2)) ? NULL : luaL_checkstring(L, 2) );
+    s = service_pool_lookup_service(pool, name);
+    lua_pushinteger(L, (s ? s->id : 0));
+    return 1;
+}
+
 static int lservice_start(lua_State *L) {
     service_t * s = lua_touserdata(L, 1);
     int ret = service_start(s);
@@ -62,6 +71,8 @@ static int lservice_get_id(lua_State *L) {
     lua_pushinteger(L, s->id);
     return 1;
 }
+
+
 
 static int lservice_get_pool(lua_State *L) {
     service_t * s = lua_touserdata(L, 1);
@@ -173,6 +184,7 @@ LUAMOD_API int luaopen_lservice3_c(lua_State *L) {
 	luaL_Reg l[] = {
         // pool
 		{ "_pool_new", lservice_pool_new },
+		{ "_lookup", lservice_lookup },
 		{ "_get_pool", lservice_get_pool },
 		{ "_get_async", lservice_get_async },
 		{ "_get_addr", lservice_get_addr },

@@ -16,6 +16,7 @@
 typedef unsigned int service_id;
 
 #define MAX_SERVICES (32)
+#define MAX_SERVICE_NAME_LEN (32)
 
 struct service;
 struct service_pool;
@@ -35,7 +36,7 @@ struct service {
 
     // service id and name
     service_id id;
-    char name[32];
+    char name[MAX_SERVICE_NAME_LEN];
 
     // init params
     char * source;
@@ -59,6 +60,7 @@ service_pool_t * service_pool_new();
 void * service_pool_registry(service_pool_t * pool, const char * key, void * ptr);
 // service_t * service_pool_query_service(service_pool_t * pool, const char * key);
 service_t * service_pool_get_service(service_pool_t * pool, service_id id);
+service_t * service_pool_lookup_service(service_pool_t * pool, const char * name);
 
 // service_t * service_new(service_pool_t * pool, const char * name);
 service_t * service_new(service_pool_t * pool, const char * name, const char * source, void * config);

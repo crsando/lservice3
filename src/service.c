@@ -62,6 +62,21 @@ service_t * service_pool_get_service(service_pool_t * pool, service_id id) {
     return pool->services[id];
 }
 
+service_t * service_pool_lookup_service(service_pool_t * pool, const char * name) {
+    service_t * s = NULL;
+    int i = 0;
+    log_info("pool id %d", pool->id);
+    while(i < pool->id) {
+        s = pool->services[i];
+        log_info("service lookup %s : %s", s->name, name);
+        if(s && (strcmp(s->name, name) == 0)) {
+            return s;
+        }
+        i++;
+    }
+    return NULL;
+}
+
 // service_t * service_pool_query_service(service_pool_t * pool, const char * key) {
 //     service_t * s = NULL;
 //     pthread_mutex_lock(&pool->lock);
@@ -322,6 +337,8 @@ service_t * service_new(service_pool_t * pool, const char * name, const char * s
         free(s);
         return NULL;
     }
+
+    strlcpy(s->name, name, MAX_SERVICE_NAME_LEN);
 
     assert(source != NULL);
     s->source = (char *)malloc(sizeof(char) * (strlen(source) + 1));
