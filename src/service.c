@@ -65,10 +65,8 @@ service_t * service_pool_get_service(service_pool_t * pool, service_id id) {
 service_t * service_pool_lookup_service(service_pool_t * pool, const char * name) {
     service_t * s = NULL;
     int i = 0;
-    log_info("pool id %d", pool->id);
     while(i < pool->id) {
         s = pool->services[i];
-        log_info("service lookup %s : %s", s->name, name);
         if(s && (strcmp(s->name, name) == 0)) {
             return s;
         }
@@ -338,7 +336,12 @@ service_t * service_new(service_pool_t * pool, const char * name, const char * s
         return NULL;
     }
 
-    strlcpy(s->name, name, MAX_SERVICE_NAME_LEN);
+    if(name && strlen(name) > 1) {
+        strlcpy(s->name, name, MAX_SERVICE_NAME_LEN);
+    }
+    else {
+        memset(s->name, 0, sizeof(s->name));
+    }
 
     assert(source != NULL);
     s->source = (char *)malloc(sizeof(char) * (strlen(source) + 1));

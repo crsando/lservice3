@@ -103,7 +103,6 @@ function service.get_id(addr)
 end
 
 function service.lookup(name) 
-    print("service.lookup", name, service.get_pool())
     if not name then return 0 end
     return service._lookup(service.get_pool(), name)
 end
