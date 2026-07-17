@@ -9,18 +9,16 @@ end
 
 function S.boot()
     print("root is booting")
-    local remote = service.spawn { name = "remote", source = "@service/remote.lua", config = {} }
-    local user = service.spawn { name = "user", source = "@service/user.lua", config = {} }
-    local echo = service.spawn { name = "echo", source = "@service/echo.lua", config = {} }
+    service.spawn { name = "remote", source = "@service/remote.lua", config = {} }
+    service.spawn { name = "user", source = "@service/user.lua", config = {} }
+    service.spawn { name = "echo", source = "@service/echo.lua", config = {} }
 
-    print("remote id", remote, service.lookup("remote"))
+    print("echo:", service.call("echo", "hi mountain"))
 
-    print("echo:", service.call(echo, "hi mountain"))
-
-    local rsp = service.call(user, "ping", 0)
+    local rsp = service.call("user", "ping", 0)
 
     print("get rsp", rsp)
-    service.call(user, "quit")
+    service.call("user", "quit")
     service.call(0, "quit")
 end
 

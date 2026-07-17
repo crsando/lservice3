@@ -259,6 +259,14 @@ function service.loopback(...)
 end
 
 function service.call(id, ...)
+    if type(id) == "string" then 
+        id = service.lookup(id)
+    end
+
+    if type(id) ~= "number" then 
+        return nil 
+    end
+
     -- print("begin service.call:", id, session_id + 1)
     service._send_message(
         service.pool,
