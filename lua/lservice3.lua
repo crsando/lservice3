@@ -35,6 +35,8 @@ service.uv = uv -- 这个变量会在service启动的一开始就启动
 service.pool = nil
 service.config = nil
 
+service.yield_session = coroutine.yield
+
 local yield_session = coroutine.yield
 
 -- basic apis
