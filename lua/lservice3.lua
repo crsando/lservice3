@@ -3,8 +3,6 @@ local inspect = require "inspect"
 
 -- 除了入口之外，这里理论上已经注册过"luv"
 -- 理论上，一个service 启动的时候，会自动加载一份 luv，故这里轮上会直接获取 package.loaded["luv"] 的结果
-print("package.loaded", package.loaded["luv"])
--- assert(package.loaded["luv"], "no luv loaded")
 local uv = require "luv"
 
 --[[
