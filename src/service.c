@@ -252,6 +252,8 @@ int service_init_lua(service_t * s) {
 
 	luaL_openlibs(L);
 
+
+
     // 加载 对应的lua source file
     if(s->source[0] == '@') {
         if(lua_loadfile_as_buffer(L, s->source)) { 
@@ -280,12 +282,14 @@ int service_init_lua(service_t * s) {
     }
 
     // load luv
-    if(service_load_luv(L, s->loop)) {
-        n_args ++;
+    if(service_load_luv(L, s->loop) < 0) {
+        log_error("FATAL ERROR: (service_load_luv failed)");
+        lua_close(L);
+        return -1;
     }
 
     // run the lua code
-    // 3 input expect (service, config, uv), no output
+    // 2 input expect (service, config), no output
 	if(lua_pcall(L, n_args, 1, 0)) {
 		log_error("FATAL THREAD PANIC: (pcall) %s", lua_tolstring(L, -1, NULL));
 		lua_close(L);
@@ -294,7 +298,6 @@ int service_init_lua(service_t * s) {
 
     // 理想情况下，上述运行的lua代码最后会返回一个函数handler（通过service.dispatch组装成一个函数）
     // 我们要保存这个函数，在每次service中断（收到某个消息）的时候调用
-
     if (!lua_isfunction(L, -1)) {
         log_debug("lua service file must return a function\n");
         lua_close(L);

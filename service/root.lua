@@ -1,6 +1,8 @@
 local inspect = require "inspect"
 local service = require "lservice3" .input(...)
 
+print("root: if luv loaded",package.loaded["luv"])
+
 local S = {}
 
 function S.pong()
@@ -12,6 +14,7 @@ function S.boot()
     service.spawn { name = "remote", source = "@service/remote.lua", config = {} }
     service.spawn { name = "user", source = "@service/user.lua", config = {} }
     service.spawn { name = "echo", source = "@service/echo.lua", config = {} }
+    service.spawn { name = "gateway", source = "@service/gateway.lua", config = {} }
 
     print("echo:", service.call("echo", "hi mountain"))
 
@@ -19,7 +22,6 @@ function S.boot()
 
     print("get rsp", rsp)
     service.call("user", "quit")
-    service.call(0, "quit")
 end
 
 function S.quit()

@@ -1,5 +1,11 @@
 local service = require "lservice3_c"
--- local inspect = require "inspect"
+local inspect = require "inspect"
+
+-- 除了入口之外，这里理论上已经注册过"luv"
+-- 理论上，一个service 启动的时候，会自动加载一份 luv，故这里轮上会直接获取 package.loaded["luv"] 的结果
+print("package.loaded", package.loaded["luv"])
+-- assert(package.loaded["luv"], "no luv loaded")
+local uv = require "luv"
 
 --[[
     common conventions:
@@ -27,7 +33,7 @@ local MESSAGE_RECEIPT_RESPONCE = 4
 
 -- preserved internal parameters
 service.self = nil -- the current running service
-service.uv = nil -- 这个变量会在service启动的一开始就启动
+service.uv = uv -- 这个变量会在service启动的一开始就启动
 service.pool = nil
 service.config = nil
 
@@ -129,19 +135,17 @@ function service.get_addr(id)
 end
 
 
-function service.input(s, config_ptr, uv)
+function service.input(s, config_ptr)
     -- print("service.input", s, config, uv)
     if s then
         service.self = s
         service.pool = service.get_pool(s)
         service.config = service.unpack_remove(config_ptr)
-        service.uv = uv
     else 
         -- print("No input, running in standalone mode")
         service.self = nil
         service.pool = nil
         service.config = {}
-        service.uv = require "luv"
     end
 
     return service
@@ -425,6 +429,14 @@ end
 -- utility functions
 --
 
+function service.sleep(ms)
+    local co = service.get_session()
+    service.set_timeout(ms, function ()
+            resume_session(co)
+        end)
+    yield_session()
+end
+
 function service.set_timeout(ms, cb)
     local timer = service.uv.new_timer()
     timer:start(ms, 0, function()
@@ -436,4 +448,3 @@ function service.set_timeout(ms, cb)
 end
 
 return service
-

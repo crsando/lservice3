@@ -192,6 +192,32 @@ static inline void unload_luv_symbols(luv_lib *lib) {
     }
 }
 
+/*
+ * luaopen_luv 只返回模块表，并不会像 require 那样更新
+ * package.loaded。将栈顶的模块表写入 package.loaded["luv"] 后，
+ * service_load_luv 会恢复调用前的 Lua 栈。
+ */
+static inline int cache_luv_module(lua_State *L) {
+    int module_index = lua_gettop(L);
+
+    lua_getglobal(L, "package");
+    if (!lua_istable(L, -1)) {
+        lua_settop(L, module_index);
+        return -1;
+    }
+
+    lua_getfield(L, -1, "loaded");
+    if (!lua_istable(L, -1)) {
+        lua_settop(L, module_index);
+        return -1;
+    }
+
+    lua_pushvalue(L, module_index);
+    lua_setfield(L, -2, "luv");
+    lua_settop(L, module_index);
+    return 0;
+}
+
 
 // 准备好luv库和环境
 
@@ -199,6 +225,7 @@ static inline int service_load_luv(lua_State *L, uv_loop_t * loop) {
     luv_lib luv;
     char errbuf[4096];
     int nret;
+    int stack_top = lua_gettop(L);
     memset(&luv,0,sizeof(luv_lib));
     memset(errbuf, 0, 4096*sizeof(char));
 
@@ -214,12 +241,21 @@ static inline int service_load_luv(lua_State *L, uv_loop_t * loop) {
     nret = luv.luaopen_luv(L);
     if (nret != 1) {
         log_debug("luaopen_luv returned %d values, expected 1", nret);
+        lua_settop(L, stack_top);
         return -1;
     }
     if (!lua_istable(L, -1)) {
-        log_debug("luaopen_luv did not return a table"); 
+        log_debug("luaopen_luv did not return a table");
+        lua_settop(L, stack_top);
         return -1;
     }
 
-    return 1;
+    if (cache_luv_module(L) != 0) {
+        log_debug("could not register luv in package.loaded");
+        lua_settop(L, stack_top);
+        return -1;
+    }
+
+    lua_settop(L, stack_top);
+    return 0;
 }
